@@ -1,0 +1,59 @@
+,,,
+Priority 1,,,
+Business Central Offline,,,
+,,,
+Store:,,Ticket:,Notes:
+1234,,https://support.it/tickets/2678,"BC offline, email sent"
+5667,,https://support.it/tickets/2678,"BC offline, email sent"
+1232,,https://support.it/tickets/2678,"BC offline, email sent"
+7891,,https://support.it/tickets/2678,"BC offline, email sent"
+1201,,https://support.it/tickets/2678,"BC offline, email sent"
+3215,,https://support.it/tickets/2678,"Store on headless setup, Escalated to Sales"
+4301,,https://support.it/tickets/2678,"BC offline, email sent"
+,,,
+Priority 2,,,
+InHand Offline,,,
+,,,
+Store:,,Ticket:,Notes:
+1234,,https://support.it/tickets/2678,IH is offline. Email sent
+5667,,https://support.it/tickets/2678,IH is pending Install.
+1232,,https://support.it/tickets/2678,IH is offline. Email sent
+7891,,https://support.it/tickets/2678,IH is offline. Email sent
+1201,,https://support.it/tickets/2678,IH is pending Install.
+3215,,https://support.it/tickets/2678,IH is pending Install.
+4301,,https://support.it/tickets/2678,IH is pending Install.
+,,,
+Priority 3 ,,,
+Cradlepoint Offline,,,
+,,,
+Store:,,Ticket:,Notes:
+1234,,https://support.it/tickets/2678,CP is offline. Email sent
+5667,,https://support.it/tickets/2678,CP is pending Install.
+1232,,https://support.it/tickets/2678,CP is offline. Email sent
+7891,,https://support.it/tickets/2678,CP is offline. Email sent
+1201,,https://support.it/tickets/2678,CP is pending Install.
+3215,,https://support.it/tickets/2678,CP is pending Install.
+4301,,https://support.it/tickets/2678,CP is pending Install.
+,,,
+Priority 4 ,,,
+On LTE,,,
+,,,
+Store:,Data Usage,Ticket:,Notes:
+1234,100 GB,https://support.it/tickets/2678,"ISP down, tech will be in today"
+5667,90 GB,https://support.it/tickets/2678,"On forced LTE , ISP outage"
+1232,25 GB,https://support.it/tickets/2678,CP WAN Disconnected. Email sent.
+7891,1 GB,https://support.it/tickets/2678,IH WAN Disconnected. Email sent.
+1201,1 GB,https://support.it/tickets/2678,CP ISP not working. Email sent
+3215,1 GB,https://support.it/tickets/2678,CP ISP not working. Email sent
+4301,1 GB,https://support.it/tickets/2678,CP ISP not working. Email sent
+,,,
+Priority 5,,,
+CP and InHand Alerts,,,
+,,,
+1234,CP,https://support.it/tickets/2678,"CP High Alerts, sent email to IT"
+5667,CP,https://support.it/tickets/2678,"CP High Alerts, sent email to IT"
+1232,CP,https://support.it/tickets/2678,"CP High Alerts, sent email to IT"
+7891,CP,https://support.it/tickets/2678,"Storm in the area, will check status tomorrow"
+1201,IH,https://support.it/tickets/2678,"IH High Alerts, High Usage, email sent"
+3215,IH,https://support.it/tickets/2678,"IH High Alerts, High Usage, email sent"
+4301,IH,https://support.it/tickets/2678,"IH High Alerts, High Usage, email sent"

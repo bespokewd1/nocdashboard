@@ -1,0 +1,17 @@
+node_modules
+.pnpm-store
+.tools
+.vinxi
+.nitro
+.output
+.tanstack
+dist
+build
+coverage
+.tmp
+*.local
+*.log
+.env
+.env.*
+AGENTS.md
+implementation_plan.md

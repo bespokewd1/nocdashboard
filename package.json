@@ -1,0 +1,47 @@
+{
+  "name": "noc-dashboard",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.5.2",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "start": "vite preview",
+    "typecheck": "node ./node_modules/typescript/bin/tsc --noEmit",
+    "test": "node ./node_modules/typescript/bin/tsc -p tsconfig.test.json && node -e \"require('node:fs').writeFileSync('.tmp/test-build/package.json', '{\\\"type\\\":\\\"commonjs\\\"}')\" && node --test .tmp/test-build/**/*.test.js"
+  },
+  "dependencies": {
+    "@iconify/react": "6.0.2",
+    "@radix-ui/react-dropdown-menu": "2.1.17",
+    "@radix-ui/react-progress": "1.1.9",
+    "@radix-ui/react-select": "2.3.0",
+    "@radix-ui/react-separator": "1.1.9",
+    "@radix-ui/react-slot": "1.2.5",
+    "@radix-ui/react-tabs": "1.1.14",
+    "@radix-ui/react-tooltip": "1.2.9",
+    "@tanstack/react-query": "5.101.0",
+    "@tanstack/react-router": "1.170.15",
+    "@tanstack/react-start": "1.168.25",
+    "@tanstack/react-table": "8.21.3",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "papaparse": "5.5.3",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "recharts": "3.8.1",
+    "tailwind-merge": "3.6.0",
+    "xlsx": "0.18.5",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.0",
+    "@types/node": "25.9.2",
+    "@types/papaparse": "5.5.2",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "tailwindcss": "4.3.0",
+    "typescript": "6.0.3",
+    "vite": "8.0.16"
+  }
+}
