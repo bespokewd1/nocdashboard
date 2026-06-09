@@ -1,4 +1,5 @@
 import Papa from 'papaparse'
+import * as XLSX from 'xlsx'
 
 import { priorityCategories } from './metadata'
 import { nocIssueSchema } from './schemas'
@@ -54,6 +55,41 @@ export function parseCsvRows(csvText: string): {
   }))
 
   return { rows, warnings }
+}
+
+export function parseXlsxRows(fileBuffer: ArrayBuffer): {
+  rows: RawReportRow[]
+  warnings: ParserWarning[]
+} {
+  const workbook = XLSX.read(fileBuffer, { type: 'array' })
+  const firstSheetName = workbook.SheetNames[0]
+
+  if (!firstSheetName) {
+    return {
+      rows: [],
+      warnings: [
+        {
+          code: 'xlsx_parse_error',
+          message: 'The workbook does not contain a worksheet to import.',
+        },
+      ],
+    }
+  }
+
+  const worksheet = workbook.Sheets[firstSheetName]
+  const rawRows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
+    header: 1,
+    blankrows: true,
+    defval: '',
+  })
+
+  return {
+    rows: rawRows.map((cells, index) => ({
+      rowNumber: index + 1,
+      cells: normalizeCells(cells.map((cell) => String(cell ?? ''))),
+    })),
+    warnings: [],
+  }
 }
 
 export function detectPrioritySections(rows: RawReportRow[]): {
@@ -170,11 +206,23 @@ export function validateIssues(issues: NocIssue[]): {
 
 export function parseNocCsvReport(csvText: string): NocImportResult {
   const csv = parseCsvRows(csvText)
-  const detected = detectPrioritySections(csv.rows)
+  return parseNocReportRows(csv.rows, csv.warnings)
+}
+
+export function parseNocXlsxReport(fileBuffer: ArrayBuffer): NocImportResult {
+  const xlsx = parseXlsxRows(fileBuffer)
+  return parseNocReportRows(xlsx.rows, xlsx.warnings)
+}
+
+export function parseNocReportRows(
+  rows: RawReportRow[],
+  initialWarnings: ParserWarning[] = [],
+): NocImportResult {
+  const detected = detectPrioritySections(rows)
   const normalized = normalizeSections(detected.sections)
   const validated = validateIssues(normalized.issues)
   const warnings = [
-    ...csv.warnings,
+    ...initialWarnings,
     ...detected.warnings,
     ...normalized.warnings,
     ...validated.warnings,
@@ -188,7 +236,7 @@ export function parseNocCsvReport(csvText: string): NocImportResult {
     warnings,
     sections: detected.sections,
     stats: {
-      totalRows: csv.rows.length,
+      totalRows: rows.length,
       dataRows: detected.sections.reduce(
         (count, section) => count + section.rows.length,
         0,

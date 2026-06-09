@@ -42,6 +42,7 @@ export type DetectedPrioritySection = {
 
 export type ParserWarningCode =
   | 'csv_parse_error'
+  | 'xlsx_parse_error'
   | 'invalid_priority'
   | 'row_outside_priority_section'
   | 'missing_store_id'

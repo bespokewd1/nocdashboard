@@ -1,4 +1,12 @@
-import { type Dispatch, type SetStateAction, useMemo, useRef, useState } from 'react'
+import {
+  type Dispatch,
+  type DragEvent,
+  type SetStateAction,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from 'react'
 import { Icon } from '@iconify/react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import {
@@ -22,7 +30,6 @@ import {
   YAxis,
 } from 'recharts'
 
-import mockCsvReport from '../../mock_data_for_noc_dashboard_sheet1.csv?raw'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -56,9 +63,10 @@ import {
   type NocImportResult,
   type NocIssue,
   type PriorityLevel,
+  browserUploadReportDataSource,
   deviceMetadata,
   deviceTypes,
-  parseNocCsvReport,
+  isSupportedReportFile,
   priorityLevels,
   priorityMetadata,
 } from '@/lib/noc-data'
@@ -79,8 +87,27 @@ type KpiCard = {
   intent: 'neutral' | 'critical' | 'watch' | 'good'
 }
 
+type UploadStatus = {
+  kind: 'idle' | 'processing' | 'success' | 'partial' | 'error'
+  message: string
+}
+
 const allFilterValue = 'all'
 const highUsageThresholdGb = 75
+const acceptedReportTypes = '.csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+const emptyImportResult: NocImportResult = {
+  issues: [],
+  warnings: [],
+  sections: [],
+  stats: {
+    totalRows: 0,
+    dataRows: 0,
+    validIssues: 0,
+    invalidRows: 0,
+    warningCount: 0,
+  },
+}
 
 const priorityChartColors: Record<PriorityLevel, string> = {
   1: '#dc2626',
@@ -113,12 +140,16 @@ function NocDashboard() {
   const navigate = useNavigate({ from: Route.fullPath })
   const search = Route.useSearch()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [importResult, setImportResult] = useState<NocImportResult>(() =>
-    parseNocCsvReport(mockCsvReport),
-  )
-  const [reportName, setReportName] = useState('mock_data_for_noc_dashboard_sheet1.csv')
+  const [isPending, startTransition] = useTransition()
+  const [importResult, setImportResult] = useState<NocImportResult>(emptyImportResult)
+  const [reportName, setReportName] = useState('No report uploaded')
   const [lastUpdated, setLastUpdated] = useState(() => new Date())
-  const [uploadError, setUploadError] = useState<string>()
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus>({
+    kind: 'idle',
+    message: 'Upload a report to begin',
+  })
+  const [isDragActive, setIsDragActive] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
   const [sorting, setSorting] = useState<SortingState>([
     { id: 'priority', desc: false },
   ])
@@ -145,6 +176,10 @@ function NocDashboard() {
   const metrics = useMemo(() => buildDashboardMetrics(importResult.issues), [importResult.issues])
   const filteredMetrics = useMemo(() => buildDashboardMetrics(filteredIssues), [filteredIssues])
   const table = useIssueTable(filteredIssues, sorting, setSorting)
+  const isUploadBusy = isProcessing || isPending
+  const hasUploadedReport = uploadStatus.kind !== 'idle'
+  const visibleWarnings = importResult.warnings.slice(0, 12)
+  const hiddenWarningCount = importResult.warnings.length - visibleWarnings.length
 
   function updateFilter(key: keyof DashboardSearch, value: string) {
     const nextValue = value === allFilterValue || value.trim() === '' ? undefined : value
@@ -166,23 +201,69 @@ function NocDashboard() {
       return
     }
 
-    if (!file.name.toLowerCase().endsWith('.csv')) {
-      setUploadError('Upload a CSV report for this MVP build.')
+    if (!isSupportedReportFile(file)) {
+      setUploadStatus({
+        kind: 'error',
+        message: 'Upload a CSV or XLSX report exported from the NOC source.',
+      })
       return
     }
 
+    setIsProcessing(true)
+    setUploadStatus({ kind: 'processing', message: `Processing ${file.name}...` })
+
     try {
-      const text = await file.text()
-      setImportResult(parseNocCsvReport(text))
-      setReportName(file.name)
-      setLastUpdated(new Date())
-      setUploadError(undefined)
+      const result = await browserUploadReportDataSource.importReport(file)
+      const nextStatus = buildUploadStatus(result)
+
+      startTransition(() => {
+        setImportResult(result)
+        setReportName(file.name)
+        setLastUpdated(new Date())
+        setUploadStatus(nextStatus)
+      })
     } catch {
-      setUploadError('The report could not be read. Try exporting the CSV again.')
+      setUploadStatus({
+        kind: 'error',
+        message: 'The report could not be read. Try exporting the CSV or XLSX file again.',
+      })
     } finally {
+      setIsProcessing(false)
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
+    }
+  }
+
+  function handleClearReport() {
+    setImportResult(emptyImportResult)
+    setReportName('No report uploaded')
+    setLastUpdated(new Date())
+    setUploadStatus({ kind: 'idle', message: 'Upload a report to begin' })
+    setSorting([{ id: 'priority', desc: false }])
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+
+    void navigate({
+      resetScroll: false,
+      search: {},
+    })
+  }
+
+  function handleDragOver(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault()
+    if (!isUploadBusy) {
+      setIsDragActive(true)
+    }
+  }
+
+  function handleDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault()
+    setIsDragActive(false)
+    if (!isUploadBusy) {
+      void handleFile(event.dataTransfer.files[0])
     }
   }
 
@@ -205,22 +286,88 @@ function NocDashboard() {
               ref={fileInputRef}
               className="sr-only"
               type="file"
-              accept=".csv,text/csv"
+              accept={acceptedReportTypes}
               onChange={(event) => void handleFile(event.target.files?.[0])}
             />
             <Button
               className="gap-2"
+              disabled={isUploadBusy}
               onClick={() => fileInputRef.current?.click()}
               type="button"
             >
-              <Icon icon={dashboardIcons.upload} className="size-4" />
-              Upload CSV
+              <Icon
+                icon={isUploadBusy ? 'tabler:loader-2' : dashboardIcons.upload}
+                className={cn('size-4', isUploadBusy && 'animate-spin')}
+              />
+              Upload report
             </Button>
-            <Badge variant={uploadError ? 'destructive' : 'secondary'} className="justify-center">
-              {uploadError ?? `${importResult.stats.validIssues} valid issues imported`}
+            {hasUploadedReport ? (
+              <Button
+                className="gap-2"
+                disabled={isUploadBusy}
+                onClick={handleClearReport}
+                type="button"
+                variant="outline"
+              >
+                <Icon icon="tabler:trash-x" className="size-4" />
+                Clear report
+              </Button>
+            ) : null}
+            <Badge
+              variant={uploadStatus.kind === 'error' ? 'destructive' : 'secondary'}
+              className="justify-center gap-1"
+            >
+              <Icon
+                icon={statusIcon(uploadStatus.kind)}
+                className={cn('size-3.5', uploadStatus.kind === 'processing' && 'animate-spin')}
+              />
+              {uploadStatus.message}
             </Badge>
           </div>
         </header>
+
+        <section
+          aria-label="Report upload"
+          className={cn(
+            'group rounded-xl border border-dashed bg-card px-4 py-3 transition-colors',
+            isDragActive ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50',
+            isUploadBusy && 'pointer-events-none opacity-75',
+          )}
+          onDragLeave={() => setIsDragActive(false)}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="mt-0.5 rounded-md bg-muted p-2 text-muted-foreground transition-colors group-hover:text-foreground">
+                <Icon
+                  icon={isDragActive ? 'tabler:file-upload' : 'tabler:file-spreadsheet'}
+                  className="size-5"
+                />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground">
+                  Drop a CSV or XLSX report here, or use the upload button.
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Files are processed locally in your browser and are not uploaded or saved. Excel
+                  imports use the first worksheet.
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+              <Icon icon="tabler:shield-check" className="size-4" />
+              Local browser processing
+            </div>
+          </div>
+        </section>
+
+        {uploadStatus.kind === 'error' ? (
+          <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            <span className="font-medium">Upload failed.</span> Check that the file is a CSV or XLSX
+            report with Priority 1 through Priority 5 sections.
+          </div>
+        ) : null}
 
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {buildKpiCards(metrics).map((card) => (
@@ -328,8 +475,14 @@ function NocDashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {metrics.lteRows.length === 0 ? (
-                <EmptyPanel message="No LTE backup rows found in the current report." />
+                {metrics.lteRows.length === 0 ? (
+                  <EmptyPanel
+                    message={
+                      hasUploadedReport
+                        ? 'No LTE backup rows found in the current report.'
+                        : 'Upload a report to review LTE backup usage.'
+                    }
+                  />
               ) : (
                 metrics.lteRows.map((row) => (
                   <div key={row.id} className="space-y-1.5">
@@ -353,8 +506,9 @@ function NocDashboard() {
                 Upload Result
               </CardTitle>
               <CardDescription>
-                {importResult.stats.totalRows} rows processed, {importResult.stats.warningCount}{' '}
-                warning{importResult.stats.warningCount === 1 ? '' : 's'}
+                {hasUploadedReport
+                  ? `${importResult.stats.totalRows} rows processed, ${importResult.stats.warningCount} warning${importResult.stats.warningCount === 1 ? '' : 's'}`
+                  : 'Upload a report to see import results and warnings'}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -364,24 +518,36 @@ function NocDashboard() {
                 <StatPill label="Invalid rows" value={importResult.stats.invalidRows} />
               </div>
               <div className="max-h-36 overflow-auto rounded-md border">
-                {importResult.warnings.length === 0 ? (
-                  <div className="px-3 py-3 text-sm text-muted-foreground">
-                    No upload warnings for this report.
+                  {!hasUploadedReport ? (
+                    <div className="px-3 py-3 text-sm text-muted-foreground">
+                      No report has been uploaded yet.
+                    </div>
+                  ) : importResult.warnings.length === 0 ? (
+                    <div className="px-3 py-3 text-sm text-muted-foreground">
+                      No upload warnings for this report.
                   </div>
                 ) : (
-                  importResult.warnings.slice(0, 8).map((warning, index) => (
+                  visibleWarnings.map((warning, index) => (
                     <div
                       key={`${warning.code}-${warning.rowNumber ?? index}`}
                       className="border-b px-3 py-2 text-sm last:border-b-0"
                     >
-                      <span className="font-medium">{warning.code}</span>
+                      <span className="font-medium">{formatWarningCode(warning.code)}</span>
                       {warning.rowNumber ? (
                         <span className="text-muted-foreground"> • row {warning.rowNumber}</span>
+                      ) : null}
+                      {warning.priority ? (
+                        <span className="text-muted-foreground"> • Priority {warning.priority}</span>
                       ) : null}
                       <p className="mt-0.5 text-muted-foreground">{warning.message}</p>
                     </div>
                   ))
                 )}
+                {hiddenWarningCount > 0 ? (
+                  <div className="px-3 py-2 text-sm font-medium text-muted-foreground">
+                    {hiddenWarningCount} more warning{hiddenWarningCount === 1 ? '' : 's'} hidden to keep the dashboard scannable.
+                  </div>
+                ) : null}
               </div>
             </CardContent>
           </Card>
@@ -396,8 +562,10 @@ function NocDashboard() {
                   Issue List
                 </CardTitle>
                 <CardDescription>
-                  Showing {filteredIssues.length} of {importResult.issues.length} issues
-                  {filteredMetrics.totalLteUsageGb > 0
+                  {hasUploadedReport
+                    ? `Showing ${filteredIssues.length} of ${importResult.issues.length} issues`
+                    : 'Upload a report to populate the issue list'}
+                  {hasUploadedReport && filteredMetrics.totalLteUsageGb > 0
                     ? ` • ${formatGb(filteredMetrics.totalLteUsageGb)} LTE in view`
                     : ''}
                 </CardDescription>
@@ -471,8 +639,8 @@ function NocDashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="rounded-md border">
-              <Table>
+            <div className="overflow-x-auto rounded-md border">
+              <Table className="min-w-[920px]">
                 <TableHeader>
                   {table.getHeaderGroups().map((headerGroup) => (
                     <TableRow key={headerGroup.id}>
@@ -490,7 +658,13 @@ function NocDashboard() {
                   {table.getRowModel().rows.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7}>
-                        <EmptyPanel message="No issues match the current filters." />
+                        <EmptyPanel
+                          message={
+                            hasUploadedReport
+                              ? 'No issues match the current filters.'
+                              : 'Upload a CSV or XLSX report to populate this table.'
+                          }
+                        />
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -739,6 +913,57 @@ function normalizeFilters(search: DashboardSearch, categories: string[]) {
     category,
     store: search.storeId ?? search.store ?? '',
   }
+}
+
+function buildUploadStatus(result: NocImportResult): UploadStatus {
+  if (result.stats.validIssues === 0 && result.stats.warningCount > 0) {
+    return {
+      kind: 'partial',
+      message: 'No valid issues imported; review upload warnings',
+    }
+  }
+
+  if (result.stats.warningCount > 0) {
+    return {
+      kind: 'partial',
+      message: `${result.stats.validIssues} valid issues imported with ${result.stats.warningCount} warning${result.stats.warningCount === 1 ? '' : 's'}`,
+    }
+  }
+
+  if (result.stats.validIssues === 0) {
+    return {
+      kind: 'success',
+      message: 'Report imported with no active issues found',
+    }
+  }
+
+  return {
+    kind: 'success',
+    message: `${result.stats.validIssues} valid issues imported`,
+  }
+}
+
+function statusIcon(status: UploadStatus['kind']) {
+  if (status === 'processing') {
+    return 'tabler:loader-2'
+  }
+  if (status === 'error') {
+    return 'tabler:alert-circle'
+  }
+  if (status === 'partial') {
+    return 'tabler:alert-triangle'
+  }
+  if (status === 'idle') {
+    return 'tabler:file-upload'
+  }
+  return 'tabler:circle-check'
+}
+
+function formatWarningCode(code: string) {
+  return code
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
 }
 
 function readSearchString(value: unknown) {

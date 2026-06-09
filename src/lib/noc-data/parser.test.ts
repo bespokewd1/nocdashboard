@@ -2,6 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import * as XLSX from 'xlsx'
 
 import {
   detectPrioritySections,
@@ -10,6 +11,7 @@ import {
   parseCsvRows,
   parseDataUsageGb,
   parseNocCsvReport,
+  parseNocXlsxReport,
 } from './index'
 import type { NocIssue } from './types'
 
@@ -158,6 +160,30 @@ describe('NOC CSV parser', () => {
 
     assert.equal(unknown.deviceType, 'Unknown')
     assert.equal(unknown.warning?.code, 'unknown_device_type')
+  })
+
+  it('parses the first Excel worksheet through the same normalized report path', () => {
+    const workbook = XLSX.utils.book_new()
+    const worksheet = XLSX.utils.aoa_to_sheet([
+      ['Priority 4', '', '', ''],
+      ['On LTE', '', '', ''],
+      ['Store:', 'Data Usage', 'Ticket:', 'Notes:'],
+      ['7001', '100 GB', 'https://support.it/tickets/3', 'ISP down'],
+    ])
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'NOC Report')
+
+    const buffer = XLSX.write(workbook, {
+      bookType: 'xlsx',
+      type: 'array',
+    }) as ArrayBuffer
+    const result = parseNocXlsxReport(buffer)
+
+    assert.equal(result.sections.length, 1)
+    assert.equal(result.issues.length, 1)
+    assert.equal(result.issues[0].storeId, '7001')
+    assert.equal(result.issues[0].deviceType, 'LTE')
+    assert.equal(result.issues[0].dataUsageGb, 100)
+    assert.equal(result.warnings.length, 0)
   })
 })
 

@@ -1,3 +1,4 @@
+export * from './data-source'
 export * from './metadata'
 export * from './parser'
 export * from './schemas'
