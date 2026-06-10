@@ -1,4 +1,5 @@
 export * from './data-source'
+export * from './dashboard-metrics'
 export * from './metadata'
 export * from './parser'
 export * from './schemas'

@@ -23,6 +23,16 @@
   --input: oklch(0.92 0.004 286.32);
   --ring: oklch(0.705 0.015 286.067);
   --radius: 0.5rem;
+  --dashboard-navy: #06264a;
+  --dashboard-navy-deep: #031b36;
+  --dashboard-navy-soft: #0d3766;
+  --dashboard-critical: #b91c1c;
+  --dashboard-critical-deep: #7f1d1d;
+  --dashboard-warning: #f97316;
+  --dashboard-gold: #d99a00;
+  --dashboard-teal: #0f9f9a;
+  --dashboard-purple: #7e22ce;
+  --dashboard-panel-shadow: 0 12px 24px rgb(15 23 42 / 0.08);
 }
 
 @theme inline {
